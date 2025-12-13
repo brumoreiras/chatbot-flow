@@ -4,19 +4,16 @@ const LS_KEY = "chatbot_builder_project_v1";
 const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
 
 const defaultProject = () => ({
-  tenant: "c2d9536e-2a42-46f6-af66-9412f769aa13",
-  filialId: 4,
-  descricao: "CHATBOT - 7409 - PH PHARMA",
+  tenant: "",
+  filialId: "",
+  descricao: "",
   ativo: true,
-  mensagemComandoInvalido:
-    "A resposta que você enviou não é um comando válido. Verifique a última mensagem enviada e tente novamente.",
-  comandoVoltar: "voltar",
+  mensagemComandoInvalido: "A resposta que você enviou não é um comando válido. Verifique a última mensagem enviada e tente novamente.",
   tempoInatividade: {
     tempoEnvioInatividade: 60,
-    mensagemInatividade:
-      "Ainda não recebemos a sua resposta. Estamos aguardando para prosseguir com o seu atendimento.",
-    tempoEnvioFinalizacaoBot: 0,
-    mensagemFinalizacaoBot: "",
+    mensagemInatividade: "Ainda não recebemos a sua resposta. Estamos aguardando para prosseguir com o seu atendimento.",
+    tempoEnvioFinalizacaoBot: 120,
+    mensagemFinalizacaoBot: "Infelizmente não recebemos uma resposta. Estamos transferindo para um atendente para que ele possa lhe ajudar e possamos dar continuidade no seu atendimento.",
   },
   defaults: {
     comandoTipo: 1,
@@ -27,8 +24,7 @@ const defaultProject = () => ({
   // Root sem "comando" por regra
   flow: {
     uiId: uid(),
-    // IMPORTANTE: manter o \n para evitar string literal não-terminada
-    resposta: "Você enviou uma mensagem para a *PH*!\nEscolha a unidade para qual deseja atendimento:",
+    resposta: "",
     comandoTipo: 1,
     transferirParaHumano: false,
     voltarMenu: false,
@@ -157,7 +153,7 @@ function buildChatbotJson(project) {
     comandos,
     ativo: project.ativo ?? true,
     mensagemComandoInvalido: project.mensagemComandoInvalido ?? "",
-    comandoVoltar: project.comandoVoltar ?? "voltar",
+    comandoVoltar: "voltar",
     tempoInatividade: project.tempoInatividade ?? {},
   };
 
@@ -176,7 +172,7 @@ function downloadJson(filename, data) {
 
 function TreeNode({ node, level, selectedId, onSelect, onAddChild, onDuplicate, onDelete, isRoot }) {
   const isSelected = selectedId === node.uiId;
-  const label = isRoot ? "(ROOT)" : node.comando || "(sem comando)";
+  const label = isRoot ? "INICIAL" : node.comando || "(sem comando)";
   const indent = { paddingLeft: `${level * 14}px` };
 
   return (
@@ -215,9 +211,9 @@ function TreeNode({ node, level, selectedId, onSelect, onAddChild, onDuplicate, 
         <button onClick={() => onAddChild(node.uiId)} title="Adicionar filho" style={btnSm}>
           + Filho
         </button>
-        <button onClick={() => onDuplicate(node.uiId)} title="Duplicar subárvore" style={btnSm}>
+       {/*  <button onClick={() => onDuplicate(node.uiId)} title="Duplicar subárvore" style={btnSm}>
           Duplicar
-        </button>
+        </button> */}
         {!isRoot && (
           <button onClick={() => onDelete(node.uiId)} title="Excluir nó" style={{ ...btnSm, color: "#b00020" }}>
             Excluir
@@ -460,7 +456,7 @@ export default function App() {
   return (
     <div style={{ fontFamily: "system-ui, Arial", padding: 16, background: "#fafafa", minHeight: "100vh" }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-        <h2 style={{ margin: 0 }}>Chatbot Flow Builder (MVP)</h2>
+        <h2 style={{ margin: 0 }}>Chatbot Flow</h2>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button onClick={resetProject} style={{ ...btnSm, color: "#b00020" }}>
             Reset
@@ -470,7 +466,7 @@ export default function App() {
 
       <div style={{ display: "grid", gridTemplateColumns: "420px 1fr 300px", gap: 12, marginTop: 12 }}>
         <div style={card}>
-          <h3 style={{ marginTop: 0 }}>Árvore</h3>
+          <h3 style={{ marginTop: 0 }}>Árvore de comandos</h3>
           <TreeNode
             node={project.flow}
             level={0}
@@ -499,7 +495,7 @@ export default function App() {
 
           {isRootSelected && (
             <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>
-              Root não possui campo <b>comando</b> (regra do seu processo).
+              Configuração inicial
             </div>
           )}
 
@@ -551,91 +547,88 @@ export default function App() {
             />
           </div>
 
-          <hr style={{ margin: "16px 0", border: "none", borderTop: "1px solid #eee" }} />
+          {isRootSelected && (
+            <>
+              <hr style={{ margin: "16px 0", border: "none", borderTop: "1px solid #eee" }} />
 
-          <h3 style={{ margin: "0 0 10px" }}>Configurações globais</h3>
+              <h3 style={{ margin: "0 0 10px" }}>Configurações globais</h3>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <label style={label}>
-              tenant
-              <input style={input} value={project.tenant} onChange={(e) => updateProjectField("tenant", e.target.value)} />
-            </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <label style={label}>
+                  tenant
+                  <input style={input} value={project.tenant} onChange={(e) => updateProjectField("tenant", e.target.value)} />
+                </label>
 
-            <label style={label}>
-              filialId
-              <input
-                style={input}
-                type="number"
-                value={project.filialId}
-                onChange={(e) => updateProjectField("filialId", Number(e.target.value))}
-              />
-            </label>
-          </div>
+                <label style={label}>
+                  filialId
+                  <input
+                    style={input}
+                    type="number"
+                    value={project.filialId}
+                    onChange={(e) => updateProjectField("filialId", Number(e.target.value))}
+                  />
+                </label>
+              </div>
 
-          <label style={label}>
-            descricao
-            <input style={input} value={project.descricao} onChange={(e) => updateProjectField("descricao", e.target.value)} />
-          </label>
+              <label style={label}>
+                descricao
+                <input style={input} value={project.descricao} onChange={(e) => updateProjectField("descricao", e.target.value)} />
+              </label>
 
-          <label style={label}>
-            mensagemComandoInvalido
-            <textarea
-              style={{ ...input, minHeight: 70, fontFamily: "inherit" }}
-              value={project.mensagemComandoInvalido}
-              onChange={(e) => updateProjectField("mensagemComandoInvalido", e.target.value)}
-            />
-          </label>
+              <label style={label}>
+                Comando Invalido
+                <textarea
+                  style={{ ...input, minHeight: 70, fontFamily: "inherit" }}
+                  value={project.mensagemComandoInvalido}
+                  onChange={(e) => updateProjectField("mensagemComandoInvalido", e.target.value)}
+                />
+              </label>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <label style={label}>
-              comandoVoltar
-              <input style={input} value={project.comandoVoltar} onChange={(e) => updateProjectField("comandoVoltar", e.target.value)} />
-            </label>
+              <Toggle label="ativo" checked={!!project.ativo} onChange={(v) => updateProjectField("ativo", v)} />
 
-            <Toggle label="ativo" checked={!!project.ativo} onChange={(v) => updateProjectField("ativo", v)} />
-          </div>
+              <h4 style={{ margin: "14px 0 8px" }}>Configuração mensagem e tempo de inatividade</h4>
 
-          <h4 style={{ margin: "14px 0 8px" }}>tempoInatividade</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <label style={label}>
+                  Tempo de envio de mensagem de inatividade (min)
+                  <input
+                    style={input}
+                    type="number"
+                    value={project.tempoInatividade?.tempoEnvioInatividade ?? 60}
+                    onChange={(e) => updateInatividadeField("tempoEnvioInatividade", Number(e.target.value))}
+                  />
+                </label>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <label style={label}>
-              tempoEnvioInatividade (min)
-              <input
-                style={input}
-                type="number"
-                value={project.tempoInatividade?.tempoEnvioInatividade ?? 60}
-                onChange={(e) => updateInatividadeField("tempoEnvioInatividade", Number(e.target.value))}
-              />
-            </label>
+                <label style={label}>
+                  Tempo de envio de mensagem de Finalização Bot (min)
+                  <input
+                    style={input}
+                    type="number"
+                    value={project.tempoInatividade?.tempoEnvioFinalizacaoBot ?? 120}
+                    onChange={(e) => updateInatividadeField("tempoEnvioFinalizacaoBot", Number(e.target.value))}
+                  />
+                </label>
+              </div>
 
-            <label style={label}>
-              tempoEnvioFinalizacaoBot (min)
-              <input
-                style={input}
-                type="number"
-                value={project.tempoInatividade?.tempoEnvioFinalizacaoBot ?? 0}
-                onChange={(e) => updateInatividadeField("tempoEnvioFinalizacaoBot", Number(e.target.value))}
-              />
-            </label>
-          </div>
+              <label style={label}>
+                Mensagem de Inatividade
+                <textarea
+                  style={{ ...input, minHeight: 70, fontFamily: "inherit" }}
+                  value={project.tempoInatividade?.mensagemInatividade ?? ""}
+                  onChange={(e) => updateInatividadeField("mensagemInatividade", e.target.value)}
+                />
+              </label>
 
-          <label style={label}>
-            mensagemInatividade
-            <textarea
-              style={{ ...input, minHeight: 70, fontFamily: "inherit" }}
-              value={project.tempoInatividade?.mensagemInatividade ?? ""}
-              onChange={(e) => updateInatividadeField("mensagemInatividade", e.target.value)}
-            />
-          </label>
-
-          <label style={label}>
-            mensagemFinalizacaoBot
-            <textarea
-              style={{ ...input, minHeight: 70, fontFamily: "inherit" }}
-              value={project.tempoInatividade?.mensagemFinalizacaoBot ?? ""}
-              onChange={(e) => updateInatividadeField("mensagemFinalizacaoBot", e.target.value)}
-            />
-          </label>
+              <label style={label}>
+                Mensagem de Finalização do Bot
+                <textarea
+                  style={{ ...input, minHeight: 70, fontFamily: "inherit" }}
+                  value={project.tempoInatividade?.mensagemFinalizacaoBot ?? ""}
+                  onChange={(e) => updateInatividadeField("mensagemFinalizacaoBot", e.target.value)}
+                />
+              </label>
+            </>
+          )}
         </div>
 
         <div style={card}>
@@ -657,8 +650,7 @@ export default function App() {
           )}
 
           <div style={{ marginTop: 12, fontSize: 12, opacity: 0.85, lineHeight: 1.4 }}>
-            O JSON não é exibido na tela. Ao clicar em <b>Gerar e baixar JSON</b>, o arquivo <code>chatbot.json</code> é
-            gerado e baixado automaticamente para anexar no ticket.
+            Após concluir a criação da Árvore de comandos, clique em "Gerar e baixar JSON" para exportar o arquivo de configuração do chatbot.
           </div>
         </div>
       </div>
