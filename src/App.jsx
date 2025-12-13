@@ -30,6 +30,9 @@ const defaultProject = () => ({
     voltarMenu: false,
     enviaMensagemComandoInvalido: true,
     statusParametroId: "",
+    isTemplate: false,
+    templateName: "",
+    templateCategory: "",
     children: [],
   },
 });
@@ -116,6 +119,7 @@ function buildCommandWithOrder({ _id, parentId, isRoot, node, defaults }) {
 function buildChatbotJson(project) {
   let nextId = 1;
   const comandos = [];
+  const templates = [];
 
   const defaults = {
     comandoTipo: 1,
@@ -141,6 +145,23 @@ function buildChatbotJson(project) {
     const cmd = buildCommandWithOrder({ _id, parentId, isRoot, node, defaults });
     comandos.push(cmd);
 
+    // Se é template, adicionar ao array de templates
+    if (node.isTemplate) {
+      if (!node.templateName || String(node.templateName).trim().length === 0) {
+        errors.push(`Template no nó ${_id} está sem nome.`);
+      }
+      if (!node.templateCategory) {
+        errors.push(`Template no nó ${_id} está sem categoria.`);
+      }
+      templates.push({
+        tipo: null,
+        mensagem: node.resposta ?? "",
+        nome: node.templateName ?? "",
+        categoria: node.templateCategory,
+        linguagem: "pt_BR",
+      });
+    }
+
     (node.children || []).forEach((child) => walk(child, _id, false));
   }
 
@@ -157,7 +178,7 @@ function buildChatbotJson(project) {
     tempoInatividade: project.tempoInatividade ?? {},
   };
 
-  return { output, errors };
+  return { output, errors, templates };
 }
 
 function downloadJson(filename, data) {
@@ -301,6 +322,9 @@ function runSelfTestsOnce() {
       voltarMenu: false,
       enviaMensagemComandoInvalido: false,
       statusParametroId: "693c190b0c3433d55d7610ab",
+      isTemplate: false,
+      templateName: "",
+      templateCategory: "",
       children: [],
     });
 
@@ -357,10 +381,15 @@ export default function App() {
   const [selectedUiId, setSelectedUiId] = useState(() => project.flow.uiId);
   // Mantém apenas os erros da última tentativa de exportação/validação
   const [lastErrors, setLastErrors] = useState(() => []);
+  const [categoryErrorMessage, setCategoryErrorMessage] = useState("");
 
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify(project));
   }, [project]);
+
+  useEffect(() => {
+    setCategoryErrorMessage("");
+  }, [selectedUiId]);
 
   const selectedNode = useMemo(() => findNode(project.flow, selectedUiId) || project.flow, [project, selectedUiId]);
   const isRootSelected = selectedNode.uiId === project.flow.uiId;
@@ -402,6 +431,9 @@ export default function App() {
         voltarMenu: false,
         enviaMensagemComandoInvalido: false,
         statusParametroId: "",
+        isTemplate: false,
+        templateName: "",
+        templateCategory: "",
         children: [],
       });
 
@@ -451,6 +483,16 @@ export default function App() {
     }
 
     downloadJson("chatbot.json", res.output);
+
+    if (res.templates.length > 0) {
+      const templatesOutput = {
+        tenant: project.tenant,
+        filialId: Number(project.filialId),
+        templatesTwilio: [],
+        templatesDialog360: res.templates,
+      };
+      downloadJson("templates.json", templatesOutput);
+    }
   }
 
   return (
@@ -546,6 +588,63 @@ export default function App() {
               onChange={(v) => updateSelectedNodeField("enviaMensagemComandoInvalido", v)}
             />
           </div>
+
+          <hr style={{ margin: "16px 0", border: "none", borderTop: "1px solid #eee" }} />
+
+          <Toggle
+            label="Esse comando é um template?"
+            checked={!!selectedNode.isTemplate}
+            onChange={(v) => updateSelectedNodeField("isTemplate", v)}
+          />
+
+          {selectedNode.isTemplate && (
+            <>
+              <label style={label}>
+                Nome do template
+                <input
+                  style={input}
+                  value={selectedNode.templateName || ""}
+                  onChange={(e) => updateSelectedNodeField("templateName", e.target.value)}
+                />
+              </label>
+
+              <div style={label}>
+                Categoria do template
+                <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <input
+                      type="radio"
+                      name={`category-${selectedNode.uiId}`}
+                      value="Marketing"
+                      checked={selectedNode.templateCategory === "Marketing"}
+                      onChange={(e) => {
+                        setCategoryErrorMessage("Não é permitido cadastrar templates do tipo marketing para o chatbot");
+                      }}
+                    />
+                    Marketing
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <input
+                      type="radio"
+                      name={`category-${selectedNode.uiId}`}
+                      value="Utility"
+                      checked={selectedNode.templateCategory === "Utility"}
+                      onChange={(e) => {
+                        updateSelectedNodeField("templateCategory", e.target.value);
+                        setCategoryErrorMessage("");
+                      }}
+                    />
+                    Utility
+                  </label>
+                </div>
+                {categoryErrorMessage && (
+                  <div style={{ color: "red", fontSize: 12, marginTop: 4 }}>
+                    {categoryErrorMessage}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {isRootSelected && (
             <>
