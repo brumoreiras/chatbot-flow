@@ -552,7 +552,7 @@ export default function App() {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <label style={label}>
-              comandoTipo
+              Tipo de Comando
               <input
                 style={input}
                 type="number"
@@ -573,17 +573,17 @@ export default function App() {
 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 6 }}>
             <Toggle
-              label="transferirParaHumano"
+              label="Transferir para humano"
               checked={!!selectedNode.transferirParaHumano}
               onChange={(v) => updateSelectedNodeField("transferirParaHumano", v)}
             />
             <Toggle
-              label="voltarMenu"
+              label="Voltar menu anterior"
               checked={!!selectedNode.voltarMenu}
               onChange={(v) => updateSelectedNodeField("voltarMenu", v)}
             />
             <Toggle
-              label="enviaMensagemComandoInvalido"
+              label="Enviar mensagem comando inválido"
               checked={!!selectedNode.enviaMensagemComandoInvalido}
               onChange={(v) => updateSelectedNodeField("enviaMensagemComandoInvalido", v)}
             />
