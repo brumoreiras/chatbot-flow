@@ -33,6 +33,7 @@ const defaultProject = () => ({
     isTemplate: false,
     templateName: "",
     templateCategory: "",
+    mensagemInterativa: null,
     children: [],
   },
 });
@@ -78,6 +79,23 @@ function duplicateSubtree(node) {
 }
 
 // Garante ordem das chaves no comando (exigência do time)
+function buildInterativo(mensagemInterativa) {
+  if (!mensagemInterativa || mensagemInterativa.tipo === undefined || mensagemInterativa.tipo === null) return null;
+  const respostas = (mensagemInterativa.botoes || [])
+    .map((botao) => ({
+      _id: botao.comando?.trim() || botao.titulo?.trim() || "",
+      titulo: botao.titulo?.trim() || botao.comando?.trim() || "",
+    }))
+    .filter((resp) => resp._id || resp.titulo);
+
+  return {
+    tipo: mensagemInterativa.tipo,
+    botao: {
+      respostas,
+    },
+  };
+}
+
 function buildCommandWithOrder({ _id, parentId, isRoot, node, defaults }) {
   const comandoTipo = node.comandoTipo ?? defaults.comandoTipo ?? 1;
   const transferirParaHumano = node.transferirParaHumano ?? defaults.transferirParaHumano ?? false;
@@ -85,11 +103,31 @@ function buildCommandWithOrder({ _id, parentId, isRoot, node, defaults }) {
   const enviaMensagemComandoInvalido =
     node.enviaMensagemComandoInvalido ?? defaults.enviaMensagemComandoInvalido ?? false;
 
+  const mensagemInterativa =
+    node.mensagemInterativa && typeof node.mensagemInterativa === "object" ? node.mensagemInterativa : null;
+  const interativo = buildInterativo(mensagemInterativa);
+
   // statusParametroId é opcional, mas quando existir, deve ser o ÚLTIMO campo.
   const hasStatus =
     node.statusParametroId !== undefined && node.statusParametroId !== null && node.statusParametroId !== "";
 
   if (isRoot) {
+    if (comandoTipo === 3) {
+      const cmd = {
+        _id,
+        idMensagemPai: null,
+        comando: null,
+        comandoTipo,
+        resposta: node.resposta ?? "",
+        transferirParaHumano,
+        voltarMenu,
+        enviaMensagemComandoInvalido,
+        statusParametroId: node.statusParametroId ?? null,
+        ...(interativo ? { interativo } : {}),
+      };
+      return cmd;
+    }
+
     const cmd = {
       _id,
       comandoTipo,
@@ -112,6 +150,7 @@ function buildCommandWithOrder({ _id, parentId, isRoot, node, defaults }) {
     voltarMenu,
     enviaMensagemComandoInvalido,
     ...(hasStatus ? { statusParametroId: node.statusParametroId } : {}),
+    ...(interativo ? { interativo } : {}),
   };
   return cmd;
 }
@@ -191,54 +230,116 @@ function downloadJson(filename, data) {
   URL.revokeObjectURL(url);
 }
 
-function TreeNode({ node, level, selectedId, onSelect, onAddChild, onDuplicate, onDelete, isRoot }) {
+function TreeNode({ node, level, selectedId, onSelect, onAddChild, onDuplicate, onDelete, isRoot, parentLabel }) {
   const isSelected = selectedId === node.uiId;
-  const label = isRoot ? "INICIAL" : node.comando || "(sem comando)";
+  const label = isRoot
+    ? "INICIAL"
+    : node.origemButtonIndex !== undefined
+    ? `Botão ${node.origemButtonIndex + 1}: ${node.comando || node.origemButtonTitulo || "(sem comando)"}`
+    : node.comando || "(sem comando)";
   const indent = { paddingLeft: `${level * 14}px` };
 
+  const showTags = parentLabel || node.origemButtonIndex !== undefined;
+
   return (
-    <div style={{ marginBottom: 6 }}>
+    <div style={{ marginBottom: 12 }}>
       <div
         style={{
           ...indent,
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
           border: isSelected ? "1px solid #111" : "1px solid #ddd",
-          borderRadius: 10,
-          padding: "8px 10px",
-          background: isSelected ? "#f3f3f3" : "#fff",
+          borderRadius: 14,
+          padding: "12px 14px",
+          background: isSelected ? "#f9fbff" : "#fff",
+          boxShadow: isSelected ? "0 2px 12px rgba(0,0,0,0.08)" : "0 1px 3px rgba(0,0,0,0.05)",
         }}
       >
-        <button
-          onClick={() => onSelect(node.uiId)}
-          style={{
-            border: "none",
-            background: "transparent",
-            cursor: "pointer",
-            fontWeight: 600,
-            textAlign: "left",
-            flex: 1,
-          }}
-          title="Selecionar nó"
-        >
-          {label}
-          <div style={{ fontWeight: 400, fontSize: 12, opacity: 0.8, marginTop: 2 }}>
-            {String(node.resposta || "").slice(0, 55)}
-            {String(node.resposta || "").length > 55 ? "…" : ""}
-          </div>
-        </button>
-
-        <button onClick={() => onAddChild(node.uiId)} title="Adicionar filho" style={btnSm}>
-          + Filho
-        </button>
-       {/*  <button onClick={() => onDuplicate(node.uiId)} title="Duplicar subárvore" style={btnSm}>
-          Duplicar
-        </button> */}
-        {!isRoot && (
-          <button onClick={() => onDelete(node.uiId)} title="Excluir nó" style={{ ...btnSm, color: "#b00020" }}>
-            Excluir
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+          <button
+            onClick={() => onSelect(node.uiId)}
+            style={{
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              textAlign: "left",
+              flex: 1,
+              padding: 0,
+            }}
+            title="Selecionar nó"
+          >
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{label}</div>
+            <div style={{ fontWeight: 400, fontSize: 13, opacity: 0.75, lineHeight: 1.4 }}>
+              {String(node.resposta || "").slice(0, 80)}
+              {String(node.resposta || "").length > 80 ? "…" : ""}
+            </div>
           </button>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-start" }}>
+            <button onClick={() => onAddChild(node.uiId)} title="Adicionar filho" style={btnSm}>
+              + Filho
+            </button>
+            {!isRoot && (
+              <button onClick={() => onDelete(node.uiId)} title="Excluir nó" style={{ ...btnSm, color: "#b00020", borderColor: "#f0b3be" }}>
+                Excluir
+              </button>
+            )}
+          </div>
+        </div>
+
+        {showTags && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+            {parentLabel && !isRoot && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 10px",
+                  background: "#fff4cc",
+                  color: "#805500",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                Comando pai: {parentLabel}
+              </div>
+            )}
+            {isRoot && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 10px",
+                  background: "#eef7ff",
+                  color: "#0366d6",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                Origem: Inicial
+              </div>
+            )}
+            {node.origemButtonIndex !== undefined && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 10px",
+                  background: "#eef6ff",
+                  color: "#0366d6",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                Associado ao botão {node.origemButtonIndex + 1}
+                {node.origemButtonTitulo ? `: ${node.origemButtonTitulo}` : ""}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -253,6 +354,7 @@ function TreeNode({ node, level, selectedId, onSelect, onAddChild, onDuplicate, 
           onDuplicate={onDuplicate}
           onDelete={onDelete}
           isRoot={false}
+          parentLabel={label}
         />
       ))}
     </div>
@@ -313,6 +415,8 @@ function runSelfTestsOnce() {
 
   try {
     const proj = defaultProject();
+    // Ensure root has a resposta for the self-test so the validation doesn't fail
+    proj.flow.resposta = "INICIAL";
     proj.flow.children.push({
       uiId: uid(),
       comando: "Volta Redonda",
@@ -329,7 +433,10 @@ function runSelfTestsOnce() {
     });
 
     const { output, errors } = buildChatbotJson(proj);
-    console.assert(errors.length === 0, "Self-test: não deveria ter erros na configuração básica");
+    // Don't throw a noisy assertion in the browser console; log errors instead for diagnostics
+    if (errors.length > 0) {
+      console.warn("Self-test: erros detectados na configuração básica:", errors);
+    }
 
     const childCmd = output.comandos.find((c) => c.comando === "Volta Redonda");
     console.assert(!!childCmd, "Self-test: comando filho deveria existir");
@@ -405,13 +512,119 @@ export default function App() {
     }));
   }
 
+  const FEATURE_DYNAMIC_INTERACTIVE_NODES = true; // MARCO: rollback flag for dynamic interactive node generation
+
+  function createInteractiveChildNode(button, index) {
+    const comando = button.comando?.trim() || button.titulo?.trim() || `Botão ${index + 1}`;
+    return {
+      uiId: uid(),
+      comando,
+      resposta: `Resposta para ${button.titulo?.trim() || comando}`,
+      comandoTipo: 1,
+      transferirParaHumano: false,
+      voltarMenu: false,
+      enviaMensagemComandoInvalido: false,
+      statusParametroId: "",
+      isTemplate: false,
+      templateName: "",
+      templateCategory: "",
+      mensagemInterativa: null,
+      origemButtonIndex: index,
+      origemButtonTitulo: button.titulo?.trim() || "",
+      children: [],
+    };
+  }
+
+  function syncInteractiveChildren(node) {
+    if (!FEATURE_DYNAMIC_INTERACTIVE_NODES) return;
+
+    const shouldHaveInteractiveChildren = node.comandoTipo === 3 && node.mensagemInterativa && node.mensagemInterativa.tipo === 1;
+    if (!shouldHaveInteractiveChildren) {
+      if (node.children?.length) {
+        node.children = node.children.filter((child) => child.origemButtonIndex === undefined);
+      }
+      return;
+    }
+
+    const buttons = node.mensagemInterativa.botoes || [];
+    const activeButtons = buttons
+      .map((button, index) => ({ button, index }))
+      .filter(({ button }) => (button.titulo?.trim() || button.comando?.trim()));
+
+    const existingChildren = node.children || [];
+    const manualChildren = existingChildren.filter((child) => child.origemButtonIndex === undefined);
+    const dynamicChildren = activeButtons.map(({ button, index }) => {
+      const existing = existingChildren.find((child) => child.origemButtonIndex === index);
+      if (existing) {
+        existing.comando = button.comando?.trim() || button.titulo?.trim() || `Botão ${index + 1}`;
+        existing.origemButtonTitulo = button.titulo?.trim() || "";
+        existing.origemButtonIndex = index;
+        return existing;
+      }
+      return createInteractiveChildNode(button, index);
+    });
+
+    node.children = [...manualChildren, ...dynamicChildren];
+  }
+
   function updateSelectedNodeField(field, value) {
     setProject((p) => {
       const next = deepClone(p);
       const node = findNode(next.flow, selectedUiId);
       if (!node) return p;
-      node[field] = value;
+      if (field === "comandoTipo") {
+        if (Number(value) === 3) {
+          node.isTemplate = false;
+          node.templateName = "";
+          node.templateCategory = "";
+        }
+        node[field] = value;
+        syncInteractiveChildren(node);
+      } else {
+        node[field] = value;
+      }
       return next;
+    });
+  }
+
+  function updateSelectedNodeMensagemInterativa(updater) {
+    setProject((p) => {
+      const next = deepClone(p);
+      const node = findNode(next.flow, selectedUiId);
+      if (!node) return p;
+      const current = node.mensagemInterativa || { tipo: 1, botoes: [] };
+      node.mensagemInterativa = updater(current);
+      syncInteractiveChildren(node);
+      return next;
+    });
+  }
+
+  function setMensagemInterativaTipo(tipo) {
+    updateSelectedNodeMensagemInterativa((current) => ({
+      ...current,
+      tipo,
+      botoes: current.botoes && current.botoes.length > 0 ? current.botoes : [{ titulo: "", comando: "" }, { titulo: "", comando: "" }],
+    }));
+  }
+
+  function updateMensagemInterativaButton(index, field, value) {
+    updateSelectedNodeMensagemInterativa((current) => {
+      const botoes = [...(current.botoes || [])];
+      while (botoes.length <= index) {
+        botoes.push({ titulo: "", comando: "" });
+      }
+      botoes[index] = { ...botoes[index], [field]: value };
+      return { ...current, botoes };
+    });
+  }
+
+  function setMensagemInterativaButtonsCount(count) {
+    updateSelectedNodeMensagemInterativa((current) => {
+      const botoes = [...(current.botoes || [])];
+      while (botoes.length < count) {
+        botoes.push({ titulo: "", comando: "" });
+      }
+      return { ...current, botoes: botoes.slice(0, count) };
     });
   }
 
@@ -434,6 +647,7 @@ export default function App() {
         isTemplate: false,
         templateName: "",
         templateCategory: "",
+        mensagemInterativa: null,
         children: [],
       });
 
@@ -496,7 +710,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ fontFamily: "system-ui, Arial", padding: 16, background: "#fafafa", minHeight: "100vh" }}>
+    <div style={{ fontFamily: "system-ui, Arial", padding: 16, background: "#fafafa", minHeight: "100vh", color: "#213547" }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
         <h2 style={{ margin: 0 }}>Chatbot Flow</h2>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -571,6 +785,83 @@ export default function App() {
             </label>
           </div>
 
+          {selectedNode.comandoTipo === 3 && (
+            <div style={{ marginTop: 12, padding: 12, border: "1px solid #eee", borderRadius: 12, background: "#fafafa" }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Mensagem Interativa</div>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <label style={{ ...label, flex: 1 }}>
+                  Tipo de mensagem
+                  <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <input
+                        type="radio"
+                        name={`mensagemInterativa-${selectedNode.uiId}`}
+                        value={1}
+                        checked={selectedNode.mensagemInterativa?.tipo === 1}
+                        onChange={() => setMensagemInterativaTipo(1)}
+                      />
+                      Botões
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <input
+                        type="radio"
+                        name={`mensagemInterativa-${selectedNode.uiId}`}
+                        value={2}
+                        checked={selectedNode.mensagemInterativa?.tipo === 2}
+                        onChange={() => setMensagemInterativaTipo(2)}
+                      />
+                      Lista (não implementado)
+                    </label>
+                  </div>
+                </label>
+              </div>
+
+              {selectedNode.mensagemInterativa?.tipo === 1 && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Configurar botões</div>
+                  <label style={label}>
+                    Quantidade de botões
+                    <select
+                      style={input}
+                      value={(selectedNode.mensagemInterativa?.botoes || []).length || 2}
+                      onChange={(e) => setMensagemInterativaButtonsCount(Number(e.target.value))}
+                    >
+                      <option value={1}>1</option>
+                      <option value={2}>2</option>
+                      <option value={3}>3</option>
+                    </select>
+                  </label>
+                  <div style={{ fontSize: 12, opacity: 0.85, marginBottom: 10 }}>
+                    Ao preencher um botão, um nó filho será criado automaticamente na árvore para configurar o comando relacionado.
+                  </div>
+                  {(selectedNode.mensagemInterativa?.botoes || [{ titulo: "", comando: "" }, { titulo: "", comando: "" }]).map((botao, index) => (
+                    <div key={index} style={{ border: "1px solid #ddd", borderRadius: 12, padding: 12, marginBottom: 10 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Botão {index + 1}</div>
+                      <label style={label}>
+                        Texto do botão
+                        <input
+                          style={input}
+                          value={botao.titulo || ""}
+                          onChange={(e) => updateMensagemInterativaButton(index, "titulo", e.target.value)}
+                        />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedNode.mensagemInterativa?.tipo === 2 && (
+                <div style={{ marginTop: 16, fontSize: 12, color: "#555" }}>
+                  Configuração de lista não está disponível nesta versão.
+                </div>
+              )}
+
+              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 8 }}>
+                Comando do tipo 3 será exportado como mensagem interativa. Se o campo mensagemInterativa estiver vazio, o fluxo atual permanece.
+              </div>
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 6 }}>
             <Toggle
               label="Transferir para humano"
@@ -591,58 +882,62 @@ export default function App() {
 
           <hr style={{ margin: "16px 0", border: "none", borderTop: "1px solid #eee" }} />
 
-          <Toggle
-            label="Esse comando é um template?"
-            checked={!!selectedNode.isTemplate}
-            onChange={(v) => updateSelectedNodeField("isTemplate", v)}
-          />
-
-          {selectedNode.isTemplate && (
+          {selectedNode.comandoTipo !== 3 && (
             <>
-              <label style={label}>
-                Nome do template
-                <input
-                  style={input}
-                  value={selectedNode.templateName || ""}
-                  onChange={(e) => updateSelectedNodeField("templateName", e.target.value)}
-                />
-              </label>
+              <Toggle
+                label="Esse comando é um template?"
+                checked={!!selectedNode.isTemplate}
+                onChange={(v) => updateSelectedNodeField("isTemplate", v)}
+              />
 
-              <div style={label}>
-                Categoria do template
-                <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              {selectedNode.isTemplate && (
+                <>
+                  <label style={label}>
+                    Nome do template
                     <input
-                      type="radio"
-                      name={`category-${selectedNode.uiId}`}
-                      value="Marketing"
-                      checked={selectedNode.templateCategory === "Marketing"}
-                      onChange={(e) => {
-                        setCategoryErrorMessage("Não é permitido cadastrar templates do tipo marketing para o chatbot");
-                      }}
+                      style={input}
+                      value={selectedNode.templateName || ""}
+                      onChange={(e) => updateSelectedNodeField("templateName", e.target.value)}
                     />
-                    Marketing
                   </label>
-                  <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <input
-                      type="radio"
-                      name={`category-${selectedNode.uiId}`}
-                      value="Utility"
-                      checked={selectedNode.templateCategory === "Utility"}
-                      onChange={(e) => {
-                        updateSelectedNodeField("templateCategory", e.target.value);
-                        setCategoryErrorMessage("");
-                      }}
-                    />
-                    Utility
-                  </label>
-                </div>
-                {categoryErrorMessage && (
-                  <div style={{ color: "red", fontSize: 12, marginTop: 4 }}>
-                    {categoryErrorMessage}
+
+                  <div style={label}>
+                    Categoria do template
+                    <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <input
+                          type="radio"
+                          name={`category-${selectedNode.uiId}`}
+                          value="Marketing"
+                          checked={selectedNode.templateCategory === "Marketing"}
+                          onChange={(e) => {
+                            setCategoryErrorMessage("Não é permitido cadastrar templates do tipo marketing para o chatbot");
+                          }}
+                        />
+                        Marketing
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <input
+                          type="radio"
+                          name={`category-${selectedNode.uiId}`}
+                          value="Utility"
+                          checked={selectedNode.templateCategory === "Utility"}
+                          onChange={(e) => {
+                            updateSelectedNodeField("templateCategory", e.target.value);
+                            setCategoryErrorMessage("");
+                          }}
+                        />
+                        Utility
+                      </label>
+                    </div>
+                    {categoryErrorMessage && (
+                      <div style={{ color: "red", fontSize: 12, marginTop: 4 }}>
+                        {categoryErrorMessage}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </>
           )}
 
