@@ -1,16 +1,26 @@
-# React + Vite
+# Chatbot Flow Builder Unified
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicacao anfitria que permite escolher entre o editor V1 e o editor V2 sem remover as implementacoes originais.
 
-Currently, two official plugins are available:
+## Executar
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```bash
+npm install
+npm run dev
+```
 
-## React Compiler
+Abra `http://127.0.0.1:5173/`. Na primeira visita, escolha uma versao. Tambem e possivel abrir diretamente:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- `/?version=v1`
+- `/?version=v2`
 
-## Expanding the ESLint configuration
+A ultima versao escolhida fica salva em `chatbot_builder_selected_version`.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Persistencia
+
+Os projetos permanecem isolados:
+
+- V1: `chatbot_builder_project_v1`
+- V2: `chatbot_builder_project_v2`
+
+A V1 e a V2 continuam sendo implementacoes independentes para preservar os formatos de exportacao existentes.
