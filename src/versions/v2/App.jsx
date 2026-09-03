@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import { trackEvent } from "../../utils/analytics.js";
 
+const APP_VERSION = "v2";
 const LS_KEY = "chatbot_builder_project_v2";
 const STAGING_TENANT = "c2d9536e-2a42-46f6-af66-9412f769aa13";
 const STAGING_FILIAL_ID = 4;
@@ -133,6 +135,10 @@ function flattenNodes(root, nodes = []) {
   nodes.push(root);
   (root.children || []).forEach((child) => flattenNodes(child, nodes));
   return nodes;
+}
+
+function countNodes(root) {
+  return flattenNodes(root).length;
 }
 
 function isDescendant(root, ancestorUiId, targetUiId) {
@@ -748,6 +754,8 @@ function TreeRow({
 
 export default function App() {
   const [project, setProject] = useState(loadProject);
+  const [projectSource] = useState(() => (localStorage.getItem(LS_KEY) ? "saved" : "new"));
+  const editorOpenedRef = useRef(false);
 
   const [selectedUiId, setSelectedUiId] = useState(() => project.flow.uiId);
   const [lastErrors, setLastErrors] = useState(() => []);
@@ -784,6 +792,22 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify(project));
   }, [project]);
+
+  useEffect(() => {
+    if (editorOpenedRef.current) return;
+    editorOpenedRef.current = true;
+    trackEvent("editor_opened", { app_version: APP_VERSION, project_source: projectSource });
+  }, [projectSource]);
+
+  useEffect(() => {
+    const term = searchTerm.trim();
+    if (!term) return undefined;
+    const timer = setTimeout(() => {
+      const searchResultCount = flattenNodes(project.flow).filter((node) => subtreeMatches(node, term)).length;
+      trackEvent("flow_search_used", { app_version: APP_VERSION, search_result_count: searchResultCount });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [project, searchTerm]);
 
   useEffect(() => {
     return () => clearTimeout(toastTimer.current);
@@ -1009,6 +1033,10 @@ export default function App() {
   }
 
   function setMensagemInterativaTipo(tipo) {
+    trackEvent("interaction_configured", {
+      app_version: APP_VERSION,
+      interaction_type: Number(tipo) === LISTA_INTERATIVA ? "list" : "button",
+    });
     updateSelectedNodeMensagemInterativa((current) => ({
       ...current,
       tipo,
@@ -1053,6 +1081,11 @@ export default function App() {
     }
     setListActionError("");
     updateListConfig((lista) => ({ ...lista, secoes: [...lista.secoes, createListSection()] }));
+    trackEvent("list_section_added", {
+      app_version: APP_VERSION,
+      section_count: selectedList.secoes.length + 1,
+      option_count: listOptionCount,
+    });
   }
 
   function removeListSection(sectionId) {
@@ -1065,6 +1098,7 @@ export default function App() {
   }
 
   function addListOption(sectionId) {
+    if (!selectedList.secoes.some((section) => section.uiId === sectionId) || listOptionCount >= MAX_LIST_OPTIONS) return;
     setListActionError("");
     updateListConfig((lista) => {
       const total = lista.secoes.reduce((count, secao) => count + secao.opcoes.length, 0);
@@ -1075,6 +1109,11 @@ export default function App() {
           secao.uiId === sectionId ? { ...secao, opcoes: [...secao.opcoes, { uiId: uid(), titulo: "", descricao: "" }] } : secao
         ),
       };
+    });
+    trackEvent("list_option_added", {
+      app_version: APP_VERSION,
+      section_count: selectedList.secoes.length,
+      option_count: listOptionCount + 1,
     });
   }
 
@@ -1178,6 +1217,11 @@ export default function App() {
     if (newId) {
       setActiveTab("mensagem");
       setSelectedUiId(newId);
+      trackEvent("flow_node_created", {
+        app_version: APP_VERSION,
+        node_type: "command",
+        flow_size: countNodes(project.flow) + 1,
+      });
     }
   }
 
@@ -1193,6 +1237,9 @@ export default function App() {
   }
 
   function duplicateNode(uiIdToDup, targetUiId) {
+    const source = findNode(project.flow, uiIdToDup);
+    const target = findNode(project.flow, targetUiId);
+    if (!source || !target || uiIdToDup === project.flow.uiId || isDescendant(project.flow, uiIdToDup, targetUiId)) return;
     setProject((p) => {
       const next = deepClone(p);
       if (uiIdToDup === next.flow.uiId) return p;
@@ -1208,6 +1255,10 @@ export default function App() {
     setDuplicateSourceId(null);
     setDuplicateTargetId("");
     showToast("Fluxo duplicado no comando selecionado.");
+    trackEvent("flow_node_duplicated", {
+      app_version: APP_VERSION,
+      flow_size: countNodes(project.flow) + countNodes(source),
+    });
   }
 
   function copyInteraction(sourceUiId, targetUiId, options) {
@@ -1357,6 +1408,7 @@ export default function App() {
   }
 
   function deleteNode(uiIdToDelete) {
+    if (uiIdToDelete === project.flow.uiId || !findNode(project.flow, uiIdToDelete)) return;
     setProject((p) => {
       const next = deepClone(p);
       if (uiIdToDelete === next.flow.uiId) return p;
@@ -1392,6 +1444,7 @@ export default function App() {
 
     if (uiIdToDelete === selectedUiId) setSelectedUiId(project.flow.uiId);
     showToast("Nó excluído.");
+    trackEvent("flow_node_deleted", { app_version: APP_VERSION, flow_size: Math.max(0, countNodes(project.flow) - 1) });
   }
 
   function toggleCollapse(uiId) {
@@ -1404,6 +1457,7 @@ export default function App() {
   }
 
   function resetProject() {
+    const flowSizeBeforeReset = countNodes(project.flow);
     const fresh = defaultProject();
     setProject(fresh);
     setSelectedUiId(fresh.flow.uiId);
@@ -1412,17 +1466,32 @@ export default function App() {
     setConfirmingReset(false);
     setConfirmingProduction(false);
     showToast("Projeto reiniciado.");
+    trackEvent("project_reset", { app_version: APP_VERSION, flow_size_before_reset: flowSizeBeforeReset });
   }
 
   function generateAndDownload() {
+    const environment = project.ambiente === "production" ? "production" : "staging";
+    const flowSize = countNodes(project.flow);
+    const interactionCount = flattenNodes(project.flow).filter((node) => node.mensagemInterativa).length;
+    const templateCount = flattenNodes(project.flow).filter((node) => node.isTemplate).length;
+    const exportMetrics = {
+      app_version: APP_VERSION,
+      flow_size: flowSize,
+      interaction_count: interactionCount,
+      template_count: templateCount,
+      environment,
+    };
+    trackEvent("chatbot_export_attempt", exportMetrics);
     if (project.ambiente === "production" && !project.tenant?.trim()) {
       setLastErrors(["Tenant é obrigatório para exportação em produção."]);
+      trackEvent("chatbot_export_error", { ...exportMetrics, error_type: "required_field", error_count: 1 });
       showToast("Informe o tenant antes de exportar para produção.", "danger");
       return;
     }
 
     if (project.ambiente === "production" && !project.filialId) {
       setLastErrors(["filialId é obrigatório para exportação em produção."]);
+      trackEvent("chatbot_export_error", { ...exportMetrics, error_type: "required_field", error_count: 1 });
       showToast("Informe o filialId antes de exportar para produção.", "danger");
       return;
     }
@@ -1432,11 +1501,11 @@ export default function App() {
       return;
     }
 
-    const environment = project.ambiente === "production" ? "production" : "staging";
     const res = buildChatbotJson(project, environment);
     setLastErrors(res.errors);
 
     if (res.errors.length > 0) {
+      trackEvent("chatbot_export_error", { ...exportMetrics, error_type: "flow_validation", error_count: res.errors.length });
       showToast(`${res.errors.length} erro(s) de validação. Corrija antes de exportar.`, "danger");
       return;
     }
@@ -1457,6 +1526,7 @@ export default function App() {
 
     setConfirmingProduction(false);
     showToast(`Arquivos de ${environment === "production" ? "produção" : "staging"} gerados e baixados.`, "success");
+    trackEvent("chatbot_export_success", exportMetrics);
   }
 
   return (

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import AppV1 from "./versions/v1/App.jsx";
 import AppV2 from "./versions/v2/App.jsx";
+import { trackEvent } from "./utils/analytics.js";
 import "./selector.css";
 
 const VERSION_QUERY = "version";
@@ -70,7 +71,7 @@ function VersionToolbar({ version, onChange }) {
     <header className="version-toolbar">
       <span className="toolbar-title">Chatbot Flow Builder</span>
       <span className="toolbar-current">{VERSION_OPTIONS[version].label}</span>
-      <button type="button" onClick={onChange}>
+      <button type="button" onClick={() => onChange(version)}>
         Trocar versão
       </button>
     </header>
@@ -81,12 +82,20 @@ export default function App() {
   const [version, setVersion] = useState(readInitialVersion);
 
   function selectVersion(nextVersion) {
+    trackEvent("version_selected", {
+      selected_version: nextVersion,
+      source: "welcome_screen",
+    });
     window.localStorage.setItem(VERSION_STORAGE_KEY, nextVersion);
     updateUrl(nextVersion);
     setVersion(nextVersion);
   }
 
-  function clearVersion() {
+  function clearVersion(currentVersion) {
+    trackEvent("version_change_requested", {
+      current_version: currentVersion,
+      source: "version_toolbar",
+    });
     const url = new URL(window.location.href);
     url.searchParams.delete(VERSION_QUERY);
     window.history.replaceState({}, "", url);

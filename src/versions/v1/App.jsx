@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { trackEvent } from "../../utils/analytics.js";
 
+const APP_VERSION = "v1";
 const LS_KEY = "chatbot_builder_project_v1";
 const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
 
@@ -484,6 +486,8 @@ export default function App() {
     }
     return defaultProject();
   });
+  const [projectSource] = useState(() => (localStorage.getItem(LS_KEY) ? "saved" : "new"));
+  const editorOpenedRef = useRef(false);
 
   const [selectedUiId, setSelectedUiId] = useState(() => project.flow.uiId);
   // Mantém apenas os erros da última tentativa de exportação/validação
@@ -493,6 +497,12 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify(project));
   }, [project]);
+
+  useEffect(() => {
+    if (editorOpenedRef.current) return;
+    editorOpenedRef.current = true;
+    trackEvent("editor_opened", { app_version: APP_VERSION, project_source: projectSource });
+  }, [projectSource]);
 
   useEffect(() => {
     setCategoryErrorMessage("");
@@ -600,6 +610,9 @@ export default function App() {
   }
 
   function setMensagemInterativaTipo(tipo) {
+    if (Number(tipo) === 1) {
+      trackEvent("interaction_configured", { app_version: APP_VERSION, interaction_type: "button" });
+    }
     updateSelectedNodeMensagemInterativa((current) => ({
       ...current,
       tipo,
@@ -629,6 +642,7 @@ export default function App() {
   }
 
   function addChild(parentUiId) {
+    if (!findNode(project.flow, parentUiId)) return;
     setProject((p) => {
       const next = deepClone(p);
       const parent = findNode(next.flow, parentUiId);
@@ -653,9 +667,17 @@ export default function App() {
 
       return next;
     });
+    trackEvent("flow_node_created", {
+      app_version: APP_VERSION,
+      node_type: "command",
+      flow_size: countNodes(project.flow) + 1,
+    });
   }
 
   function duplicateNode(uiIdToDup) {
+    const node = findNode(project.flow, uiIdToDup);
+    const parent = findParent(project.flow, uiIdToDup);
+    if (!node || !parent || uiIdToDup === project.flow.uiId) return;
     setProject((p) => {
       const next = deepClone(p);
       if (uiIdToDup === next.flow.uiId) return p;
@@ -668,9 +690,11 @@ export default function App() {
       parent.children.push(duplicateSubtree(node));
       return next;
     });
+    trackEvent("flow_node_duplicated", { app_version: APP_VERSION, flow_size: countNodes(project.flow) + countNodes(node) });
   }
 
   function deleteNode(uiIdToDelete) {
+    if (uiIdToDelete === project.flow.uiId || !findNode(project.flow, uiIdToDelete)) return;
     setProject((p) => {
       const next = deepClone(p);
       if (uiIdToDelete === next.flow.uiId) return p;
@@ -679,19 +703,37 @@ export default function App() {
     });
 
     if (uiIdToDelete === selectedUiId) setSelectedUiId(project.flow.uiId);
+    trackEvent("flow_node_deleted", { app_version: APP_VERSION, flow_size: Math.max(0, countNodes(project.flow) - 1) });
   }
   function resetProject() {
+    const flowSizeBeforeReset = countNodes(project.flow);
     const fresh = defaultProject();
     setProject(fresh);
     setSelectedUiId(fresh.flow.uiId);
     setLastErrors([]);
+    trackEvent("project_reset", { app_version: APP_VERSION, flow_size_before_reset: flowSizeBeforeReset });
   }
 
   function generateAndDownload() {
+    const flowSize = countNodes(project.flow);
+    const interactionCount = countInteractions(project.flow);
+    const templateCount = countTemplates(project.flow);
+    trackEvent("chatbot_export_attempt", {
+      app_version: APP_VERSION,
+      flow_size: flowSize,
+      interaction_count: interactionCount,
+      template_count: templateCount,
+    });
     const res = buildChatbotJson(project);
     setLastErrors(res.errors);
 
     if (res.errors.length > 0) {
+      trackEvent("chatbot_export_error", {
+        app_version: APP_VERSION,
+        error_type: "flow_validation",
+        error_count: res.errors.length,
+        flow_size: flowSize,
+      });
       alert("Existem erros de validação. Corrija antes de exportar.");
       return;
     }
@@ -707,6 +749,12 @@ export default function App() {
       };
       downloadJson("templates.json", templatesOutput);
     }
+    trackEvent("chatbot_export_success", {
+      app_version: APP_VERSION,
+      flow_size: flowSize,
+      interaction_count: interactionCount,
+      template_count: templateCount,
+    });
   }
 
   return (
@@ -1050,4 +1098,19 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+function countNodes(root) {
+  if (!root) return 0;
+  return 1 + (root.children || []).reduce((total, child) => total + countNodes(child), 0);
+}
+
+function countInteractions(root) {
+  if (!root) return 0;
+  return (root.mensagemInterativa ? 1 : 0) + (root.children || []).reduce((total, child) => total + countInteractions(child), 0);
+}
+
+function countTemplates(root) {
+  if (!root) return 0;
+  return (root.isTemplate ? 1 : 0) + (root.children || []).reduce((total, child) => total + countTemplates(child), 0);
 }
