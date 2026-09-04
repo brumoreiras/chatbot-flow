@@ -30,6 +30,7 @@ function readInitialVersion() {
 function updateUrl(version) {
   const url = new URL(window.location.href);
   url.searchParams.set(VERSION_QUERY, version);
+  url.searchParams.delete("completed");
   window.history.replaceState({}, "", url);
 }
 
@@ -98,6 +99,7 @@ export default function App() {
     });
     const url = new URL(window.location.href);
     url.searchParams.delete(VERSION_QUERY);
+    url.searchParams.delete("completed");
     window.history.replaceState({}, "", url);
     setVersion(null);
   }

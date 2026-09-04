@@ -711,6 +711,9 @@ export default function App() {
     setProject(fresh);
     setSelectedUiId(fresh.flow.uiId);
     setLastErrors([]);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("completed");
+    window.history.replaceState({}, "", url);
     trackEvent("project_reset", { app_version: APP_VERSION, flow_size_before_reset: flowSizeBeforeReset });
   }
 

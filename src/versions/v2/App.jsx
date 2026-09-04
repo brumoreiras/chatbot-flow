@@ -1463,6 +1463,9 @@ export default function App() {
     setSelectedUiId(fresh.flow.uiId);
     setActiveTab("global");
     setLastErrors([]);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("completed");
+    window.history.replaceState({}, "", url);
     setConfirmingReset(false);
     setConfirmingProduction(false);
     showToast("Projeto reiniciado.");
