@@ -1526,6 +1526,9 @@ export default function App() {
 
     setConfirmingProduction(false);
     showToast(`Arquivos de ${environment === "production" ? "produção" : "staging"} gerados e baixados.`, "success");
+    const url = new URL(window.location.href);
+    url.searchParams.set("completed", "true");
+    window.history.replaceState({}, "", url);
     trackEvent("chatbot_export_success", exportMetrics);
   }
 
